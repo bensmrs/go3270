@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/racingmars/go3270"
+	"github.com/bensmrs/go3270"
 )
 
 func init() {
