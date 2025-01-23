@@ -155,7 +155,7 @@ func readFields(c net.Conn, fm fieldmap) (map[string]string, error) {
 		if eor {
 			// Finish the current field
 			if infield {
-				debugf("Field %d: %s\n", fieldpos, e2a(fieldval.Bytes()))
+				debugf("Field %d: %s\n", fieldpos, decode(fieldval.Bytes()))
 				handleField(fieldpos, fieldval.Bytes(), fm, values)
 			}
 
@@ -166,7 +166,7 @@ func readFields(c net.Conn, fm fieldmap) (map[string]string, error) {
 		if b == 0x11 {
 			// Finish the previous field, if necessary
 			if infield {
-				debugf("Field %d: %s\n", fieldpos, e2a(fieldval.Bytes()))
+				debugf("Field %d: %s\n", fieldpos, decode(fieldval.Bytes()))
 				handleField(fieldpos, fieldval.Bytes(), fm, values)
 			}
 			// Start a new field
@@ -198,7 +198,7 @@ func handleField(addr int, value []byte, fm fieldmap, values map[string]string) 
 	}
 
 	// Otherwise, populate the value
-	values[name] = string(e2a(value))
+	values[name] = decode(value)
 	return true
 }
 

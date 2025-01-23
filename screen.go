@@ -6,6 +6,7 @@ package go3270
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"strings"
 )
@@ -22,8 +23,11 @@ type Field struct {
 	// must be 0-79.
 	Col int
 
-	// Text is the content of the field to display.
+	// Content is the content of the field to display.
 	Content string
+
+	// ContentBytes is the content of the field to display as a byte array.
+	ContentBytes []byte
 
 	// Write allows the user to edit the value of the field.
 	Write bool
@@ -48,9 +52,21 @@ type Field struct {
 	// Color is the field color. The default value is the default color.
 	Color Color
 
+	// BackgroundColor is the field background color. The default value is the
+	// default color.
+	BackgroundColor Color
+
 	// Highlighting is the highlight attribute for the field. The default value
 	// is the default (i.e. no) highlighting.
 	Highlighting Highlight
+
+	// CharacterSet is the charset attribute for the field. The default value is
+	// the default charset.
+	CharacterSet CharacterSet
+
+	// InputCharset is the input charset within the code. The default value is
+	// the default input charset.
+	InputCharset InputCharset
 
 	// Name is the name of this field, which is used to get the user-entered
 	// data. All writeable fields on a screen must have a unique name.
@@ -69,14 +85,23 @@ type Color byte
 
 // The valid 3270 colors
 const (
-	DefaultColor Color = 0
-	Blue         Color = 0xf1
-	Red          Color = 0xf2
-	Pink         Color = 0xf3
-	Green        Color = 0xf4
-	Turquoise    Color = 0xf5
-	Yellow       Color = 0xf6
-	White        Color = 0xf7
+	DefaultColor      Color = 0
+	NeutralBackground Color = 0xf0
+	Blue              Color = 0xf1
+	Red               Color = 0xf2
+	Pink              Color = 0xf3
+	Green             Color = 0xf4
+	Turquoise         Color = 0xf5
+	Yellow            Color = 0xf6
+	Neutral           Color = 0xf7
+	Black             Color = 0xf8
+	DeepBlue          Color = 0xf9
+	Orange            Color = 0xfa
+	Purple            Color = 0xfb
+	PaleGreen         Color = 0xfc
+	PaleTurquoise     Color = 0xfd
+	Grey              Color = 0xfe
+	White             Color = 0xff
 )
 
 // Highlight is a 3270 extended field attribute highlighting method
@@ -88,6 +113,24 @@ const (
 	Blink            Highlight = 0xf1
 	ReverseVideo     Highlight = 0xf2
 	Underscore       Highlight = 0xf4
+)
+
+// CharacterSet is a 3270 extended field attribute charset value
+type CharacterSet byte
+
+// The valid 3270 charsets
+const (
+	DefaultCharacterSet CharacterSet = 0
+	APL                 CharacterSet = 0xf1
+)
+
+// InputCharset is the charset of the input string
+type InputCharset string
+
+// The valid input charsets
+const (
+	DefaultInputCharset InputCharset = ""
+	EBCDIC              InputCharset = "ebcdic"
 )
 
 // Screen is an array of Fields which compose a complete 3270 screen.
@@ -126,16 +169,28 @@ func ShowScreen(screen Screen, values map[string]string, crow, ccol int,
 		b.Write(sba(fld.Row, fld.Col))
 		b.Write(buildField(fld))
 
-		// Use fld.Content, unless the field is named and appears in the
-		// value map.
-		content := fld.Content
-		if fld.Name != "" {
-			if val, ok := values[fld.Name]; ok {
-				content = val
+		// Use in order of priority the value of the named field (if the field
+		// is named and appears in the value map), fld.Content, or fld.ContentBytes.
+		if fld.Content != "" || fld.Name != "" {
+			content := fld.Content
+			if fld.Name != "" {
+				if val, ok := values[fld.Name]; ok {
+					content = val
+				}
 			}
-		}
-		if content != "" {
-			b.Write(a2e([]byte(content)))
+
+			if len(content) > 0 {
+				switch fld.InputCharset {
+				case "":
+					b.Write(encode(content))
+				case "ebcdic":
+					b.Write([]byte(content))
+				default:
+					return Response{}, fmt.Errorf("Unknown input charset %s", fld.InputCharset)
+				}
+			}
+		} else {
+			b.Write(fld.ContentBytes)
 		}
 
 		// If a writable field, add it to the field map. We add 1 to bufaddr
@@ -195,7 +250,7 @@ func sba(row, col int) []byte {
 // field.
 func buildField(f Field) []byte {
 	var buf bytes.Buffer
-	if f.Color == DefaultColor && f.Highlighting == DefaultHighlight {
+	if f.Color == DefaultColor && f.BackgroundColor == DefaultColor && f.Highlighting == DefaultHighlight && f.CharacterSet == DefaultCharacterSet {
 		// this is a traditional field, issue a normal sf command
 		buf.WriteByte(0x1d) // sf - "start field"
 		buf.WriteByte(sfAttribute(f.Write, f.Intense, f.Hidden, f.Autoskip,
@@ -209,7 +264,13 @@ func buildField(f Field) []byte {
 	if f.Color != DefaultColor {
 		paramCount++
 	}
+	if f.BackgroundColor != DefaultColor {
+		paramCount++
+	}
 	if f.Highlighting != DefaultHighlight {
+		paramCount++
+	}
+	if f.CharacterSet != DefaultCharacterSet {
 		paramCount++
 	}
 	buf.WriteByte(paramCount)
@@ -229,6 +290,18 @@ func buildField(f Field) []byte {
 	if f.Color != DefaultColor {
 		buf.WriteByte(0x42)
 		buf.WriteByte(byte(f.Color))
+	}
+
+	// Write the charset attribute
+	if f.CharacterSet != DefaultCharacterSet {
+		buf.WriteByte(0x43)
+		buf.WriteByte(byte(f.CharacterSet))
+	}
+
+	// Write the background color attribute
+	if f.BackgroundColor != DefaultColor {
+		buf.WriteByte(0x45)
+		buf.WriteByte(byte(f.BackgroundColor))
 	}
 
 	return buf.Bytes()
