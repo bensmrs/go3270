@@ -101,7 +101,7 @@ const (
 	PaleGreen         Color = 0xfc
 	PaleTurquoise     Color = 0xfd
 	Grey              Color = 0xfe
-	White             Color = 0xff
+	White             Color = 0xff // Doesn’t seem to work
 )
 
 // Highlight is a 3270 extended field attribute highlighting method

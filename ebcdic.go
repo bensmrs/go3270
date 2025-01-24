@@ -216,7 +216,8 @@ func encode(u string) []byte {
 		if ok {
 			result = append(result, c...)
 		} else {
-			lastRune = &r
+			tempRune := r
+			lastRune = &tempRune
 		}
 	}
 
